@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <div id="app"></div>
+    <script src="../dist/runtime-dom.global.js"></script>
+    <script>
+        let { createApp, h, ref } = VueRuntimeDOM; // VueRuntimeDOM -> VueRuntimeCore -> reactivity
+        function useCounter() {
+            const count = ref(0);
+            const add = () => {
+                count.value++;
+            }
+            return { count, add }
+        }
+        let App = {
+            props:{
+                title:{}
+            },
+            // compostionAPI  reactive ref computed
+            setup(props,ctx) {
+                // let { count, add } = useCounter()
+                // setup 可以返回render函数 ， 或者可以返回渲染所需要的数据结果
+                // return () => { // 组件的渲染函数 ， 默认渲染组件时会调用次函数
+                //     return h('h1', { onClick: add }, 'hello zf' + count.value)
+                // }
+                // return {
+                //     count,
+                //     add
+                // }
+                let flag = ref(true);
+                setTimeout(()=>{
+                    flag.value = !flag.value
+                },1000);
+                return {
+                    flag
+                }
+            },
+            // 每次更新重新调用render方法  this.
+            render(proxy){
+                return this.flag.value? h('div',{style:{color:'red'}},'hello'): h('div',{style:{color:'green'}},'world')
+                // return h('h1', { onClick:this.add,title:proxy.title,style:{color:'red'} }, h('span',['world',h('a','xxxx')]) ,this.count.value)
+            }
+        }
+
+        let app = createApp(App,{title:'zf',a:1});
+        app.mount('#app');
+    </script>
+</body>
+
+</html>
