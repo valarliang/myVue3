@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+<body>
+  <div id="app"></div>
+<script src="../dist/reactivity.global.js"></script>
+<script>
+  const { reactive, effect, computed, ref, toRaw } = VueReactivity
+  const cyber = { name:'David&Lucy', friends: 'Maine', job: { main: 'edgerunner' } }
+  const David = reactive(cyber)
+  const Lucy = reactive(cyber)
+  const count = ref(0)
+  let origin
+  // 测试重复添加响应、获取代理的原始对象
+  console.log(reactive(David) === David, David === Lucy, David, origin = toRaw(David))
+
+  // // 测试computed
+  // const mates = computed({
+  //   get() {
+  //     return Lucy.friends + ' Dorio'
+  //   },
+  //   set(value) {
+  //     console.log('set value:' + value)
+  //   }
+  // })
+
+  // // 测试effect
+  // const runner = effect(() => {
+  //   app.innerText = `name: ${Lucy.name}
+  //   friends: ${Lucy.friends}
+  //   job: ${Lucy.job.main}
+  //   mates: ${mates.value}
+  //   count: ${count.value}`
+  // })
+  // // 测试强制执行effect、注销effect
+  // runner()
+  // runner.effect.stop()
+
+  // // 测试 effect 响应
+  // setTimeout(() => {
+  //   David.name = 'David'
+  //   Lucy.job.main = 'netrunner'
+  // }, 1000);
+  // setTimeout(() => {
+  //   Lucy.friends += ' Rebecca' // 测试 computed 响应
+  // }, 2000);
+  // setTimeout(() => {
+  //   count.value++ // 测试 ref 响应
+  // }, 3000);
+</script>
+</body>
+</html>
