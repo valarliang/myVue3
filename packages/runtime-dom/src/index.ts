@@ -10,14 +10,14 @@ export const createApp = (component, rootProps = null) => {
   let app = createApp(component, rootProps);
   let { mount } = app; // 获取core中mount
   app.mount = function (container) {  // 在重写mount
-      container = nodeOps.querySelector(container);
-      container.innerHTML = '';
-      mount(container); // 处理节点后传入到mount中
+    container = nodeOps.querySelector(container);
+    container.innerHTML = '';
+    mount(container); // 处理节点后传入到mount中
   }
   return app;
 }
 
-export const createSSRApp = () =>{ 
+export const createSSRApp = () => {
 
 }
 

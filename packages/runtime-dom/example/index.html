@@ -45,7 +45,7 @@
             },
             // 每次更新重新调用render方法  this.
             render(proxy){
-                return this.flag.value? h('div',{style:{color:'red'}},'hello'): h('div',{style:{color:'green'}},'world')
+                return this.flag.value? h('div',{style:{color:'red'}},['hello', 'world']): h('div',{style:{color:'green'}},'world')
                 // return h('h1', { onClick:this.add,title:proxy.title,style:{color:'red'} }, h('span',['world',h('a','xxxx')]) ,this.count.value)
             }
         }

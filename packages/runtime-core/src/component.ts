@@ -5,7 +5,8 @@ export function createComponentInstance(vnode){
     const instance = {
         vnode, // 实例对应的虚拟节点
         type, // 组件对象
-        subTree: null, // 组件渲染的内容   vue3中组件的vnode 就叫vnode  组件渲染的结果 subTree
+        subTree: null, // 组件渲染的内容   will be set synchronously right after creation
+        update: null!, // will be set synchronously right after creation
         ctx: {}, // 组件上下文
         props: {}, // 组件属性
         attrs: {}, // 除了props中的属性 
@@ -18,7 +19,7 @@ export function createComponentInstance(vnode){
         exposed:{}, // 暴露的方法
         isMounted: false // 是否挂载完成
     }
-    instance.ctx = {_:instance};
+    instance.ctx = {_:instance}; // 也可以直接赋值instance
     return instance;
 }
 export function initProps(instance,rawProps){
