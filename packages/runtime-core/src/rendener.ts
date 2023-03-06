@@ -97,6 +97,7 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
     // 挂载到DOM
     hostInsert(el, container, anchor);
   }
+  // 属性patch
   const patchProps = (oldProps, newProps, el) => {
     if (oldProps === newProps) return;
 
@@ -113,6 +114,7 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
       }
     }
   }
+  // 新旧两组子元素patch
   const patchKeyedChildren = (c1, c2, container) => {
     let i = 0
     let e1 = c1.length - 1 // prev ending index
@@ -180,10 +182,10 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
       const s1 = i // prev starting index
       const s2 = i // next starting index
 
-      // 5.1 build key:index map for newChildren
+      // 5.1 build key:index map for newChildren：{e:2, d:3, c:4, h:5}
       const keyToNewIndexMap = new Map()
       for (let i = s2; i <= e2; i++) {
-        keyToNewIndexMap.set(c2[i].key, i) // {e:2, d:3, c:4, h:5}
+        keyToNewIndexMap.set(c2[i].key, i)
       }
 
       // used for determining longest stable subsequence
@@ -198,13 +200,12 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
         if (newIndex === undefined) {
           unmount(prevChild) // 移除不需要的旧节点
         } else {
-          newIndexToOldIndexMap[newIndex - s2] = i + 1 // [4,3,2,0]
+          newIndexToOldIndexMap[newIndex - s2] = i + 1 // [4,3,2,0] 加1是为避免s1为0（0用于判定是否为新增节点）
           patch(prevChild, c2[newIndex], container) // 递归patch相同的节点
         }
       }
 
       // 5.3 move and mount
-
       // looping backwards so that we can use last patched node as anchor
       for (i = toBePatched - 1; i >= 0; i--) { 
         const nextIndex = s2 + i
@@ -213,7 +214,13 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
         if (newIndexToOldIndexMap[i] === 0) { // mount新增节点
           patch(null, nextChild, container, anchor)
         } else { // 利用 最长递增子序列算法 优化移动复用节点的次数（减少DOM操作）
-          hostInsert(nextChild.el, container, anchor)
+          const increasingNewIndexSequence = getSequence(newIndexToOldIndexMap) // generate longest stable subsequence
+          let j = increasingNewIndexSequence.length - 1
+          if (i !== increasingNewIndexSequence[j]) {
+            hostInsert(nextChild.el, container, anchor)
+          } else {
+            j--
+          }
         }
       }
     }
@@ -223,6 +230,7 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
       unmount(children[i])
     }
   }
+  // 子元素对比
   const patchChildren = (n1, n2, container) => {
     const c1 = n1 && n1.children
     const c2 = n2.children
