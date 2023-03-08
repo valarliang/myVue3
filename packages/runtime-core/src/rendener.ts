@@ -206,6 +206,8 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
       }
 
       // 5.3 move and mount
+      const increasingNewIndexSequence = getSequence(newIndexToOldIndexMap) // generate longest stable subsequence
+      let j = increasingNewIndexSequence.length - 1
       // looping backwards so that we can use last patched node as anchor
       for (i = toBePatched - 1; i >= 0; i--) { 
         const nextIndex = s2 + i
@@ -213,10 +215,9 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
         const anchor = nextIndex + 1 < c2.length ? c2[nextIndex + 1].el : null
         if (newIndexToOldIndexMap[i] === 0) { // mount新增节点
           patch(null, nextChild, container, anchor)
-        } else { // 利用 最长递增子序列算法 优化移动复用节点的次数（减少DOM操作）
-          const increasingNewIndexSequence = getSequence(newIndexToOldIndexMap) // generate longest stable subsequence
-          let j = increasingNewIndexSequence.length - 1
-          if (i !== increasingNewIndexSequence[j]) {
+        } else {
+          // 利用 最长递增子序列算法 优化移动复用节点的次数（减少DOM操作）
+          if (i !== increasingNewIndexSequence[j]) { // 如果是递增序列元素则无需移动
             hostInsert(nextChild.el, container, anchor)
           } else {
             j--
