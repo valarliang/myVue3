@@ -1,8 +1,8 @@
-const minimist = require('minimist')
+const minimist = require('minimist') // 将命令行参数解析为对象
 const execa = require('execa')
 
-const args = minimist(process.argv.slice(2))
-const target = args._[0]
+const args = minimist(process.argv.slice(2)) // 去掉argv默认自带的node路径、脚本路径参数
+const target = args._[0] // runtime-dom
 const format = args.f || 'global'
 const sourcemap = args.s || false
 
