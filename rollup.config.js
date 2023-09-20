@@ -30,7 +30,7 @@ console.log(packageConfigs)
 function createConfig(format, output) {
   let external = []
   if (format === 'global') output.name = pkg.buildOptions.name
-  else external = Object.keys(pkg.dependencies)
+  else external = Object.keys(pkg.dependencies) // 模块化模式不打包依赖包
   return {
     input: resolve('src/index.ts'),
     output: {

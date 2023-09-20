@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "dev": "node scripts/dev.js runtime-dom -f global -s"
+    "build-runtime-dom": "node scripts/dev.js runtime-dom -f global -s",
+    "build-reactivity": "node scripts/dev.js reactivity -f global -s"
   },
   "keywords": [],
   "author": "",

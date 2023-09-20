@@ -31,10 +31,10 @@ function createGetter(isReadonly = false, shallow = false) {
     ) {
       return target
     }
+    
     const res = Reflect.get(target, key, receiver)
-
     if (!isReadonly) {
-      track(target, key) // 依赖收集
+      track(target, key) // 主线：依赖收集
     }
     if (shallow) {
       return res // shallow 不递归代理嵌套对象
@@ -53,7 +53,7 @@ function createSetter() {
   return function set(target, key, value, receiver) {
     const oldValue = target[key]
     const result = Reflect.set(target, key, value, receiver)
-    if (oldValue !== value) trigger(target, key)
+    if (oldValue !== value) trigger(target, key) // 主线：依赖触发
     return result
   }
 }
@@ -85,9 +85,8 @@ const shallowReadonlyMap = new WeakMap()
 
 function createReactiveObject(target, isReadonly, baseHandlers, proxyMap) {
   if (!isObject(target)) return target
-  // target is already a Proxy, return it.
+  // target is already a Proxy, return it.代理已经被代理过的对象 直接返回（原理：被代理后 target[ReactiveFlags.RAW] 将返回原始对象，为 true）
   // exception: calling readonly() on a reactive object
-  // 代理 已经被代理过的对象 直接返回（原理：被代理后 target[ReactiveFlags.RAW] 将返回原始对象，为 true）
   if (target[ReactiveFlags.RAW] && !(isReadonly && target[ReactiveFlags.IS_REACTIVE])) {
     return target
   }
@@ -95,8 +94,8 @@ function createReactiveObject(target, isReadonly, baseHandlers, proxyMap) {
   const existingProxy = proxyMap.get(target) // 解决重复代理同一对象问题（原理：使用 WeakMap 缓存）
   if (existingProxy) return existingProxy
 
-  const proxy = new Proxy(target, baseHandlers)
-  proxyMap.set(target, proxy)
+  const proxy = new Proxy(target, baseHandlers) // 主线
+  proxyMap.set(target, proxy) // 缓存
   return proxy
 }
 

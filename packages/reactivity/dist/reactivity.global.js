@@ -134,7 +134,7 @@ var VueReactivity = (function (exports) {
           const oldValue = target[key];
           const result = Reflect.set(target, key, value, receiver);
           if (oldValue !== value)
-              trigger(target, key);
+              trigger(target, key); // 依赖触发
           return result;
       };
   }
@@ -163,9 +163,8 @@ var VueReactivity = (function (exports) {
   function createReactiveObject(target, isReadonly, baseHandlers, proxyMap) {
       if (!isObject(target))
           return target;
-      // target is already a Proxy, return it.
+      // target is already a Proxy, return it.代理已经被代理过的对象 直接返回（原理：被代理后 target[ReactiveFlags.RAW] 将返回原始对象，为 true）
       // exception: calling readonly() on a reactive object
-      // 代理 已经被代理过的对象 直接返回（原理：被代理后 target[ReactiveFlags.RAW] 将返回原始对象，为 true）
       if (target["__v_raw" /* ReactiveFlags.RAW */] && !(isReadonly && target["__v_isReactive" /* ReactiveFlags.IS_REACTIVE */])) {
           return target;
       }
@@ -173,7 +172,7 @@ var VueReactivity = (function (exports) {
       if (existingProxy)
           return existingProxy;
       const proxy = new Proxy(target, baseHandlers);
-      proxyMap.set(target, proxy);
+      proxyMap.set(target, proxy); // 缓存
       return proxy;
   }
   function reactive(target) {
@@ -265,6 +264,7 @@ var VueReactivity = (function (exports) {
       return !!(r && r.__v_isRef === true);
   }
 
+  exports.ReactiveEffect = ReactiveEffect;
   exports.computed = computed;
   exports.effect = effect;
   exports.reactive = reactive;
