@@ -85,8 +85,8 @@ const shallowReadonlyMap = new WeakMap()
 
 function createReactiveObject(target, isReadonly, baseHandlers, proxyMap) {
   if (!isObject(target)) return target
-  // target is already a Proxy, return it.代理已经被代理过的对象 直接返回（原理：被代理后 target[ReactiveFlags.RAW] 将返回原始对象，为 true）
-  // exception: calling readonly() on a reactive object
+  // target is already a Proxy, return it.代理已经被代理过的对象 直接返回（原理：代理对象读取 ReactiveFlags.RAW属性会返回原始对象，为 true）
+  // exception: calling readonly() on a reactive object. 要考虑已代理对象转readonly的情况，判断是否已为只读对象，否则会直接返回代理对象
   if (target[ReactiveFlags.RAW] && !(isReadonly && target[ReactiveFlags.IS_REACTIVE])) {
     return target
   }
@@ -127,4 +127,19 @@ export function markRaw(value) {
     value
   })
   return value
+}
+
+export function isReactive(value: unknown): boolean {
+  if (isReadonly(value)) {
+    return isReactive(value[ReactiveFlags.RAW])
+  }
+  return !!(value && value[ReactiveFlags.IS_REACTIVE])
+}
+
+export function isShallow(value: unknown): boolean {
+  return !!(value && value[ReactiveFlags.IS_SHALLOW])
+}
+
+export function isReadonly(value: unknown): boolean {
+  return !!(value && value[ReactiveFlags.IS_READONLY])
 }

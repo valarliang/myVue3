@@ -1,4 +1,4 @@
-// effectStack作用：
+// effectStack作用（源码中通过 parent 属性实现）：
 // 1.配合 activedEffect 解决 effect 内部嵌套 effect 时收集的依赖属性属于哪个effect的问题
 // 2.记录当前effect实例，避免 fn 内赋值时触发 setter 重复执行 run()导致死循环
 const effectStack = []
@@ -11,6 +11,7 @@ export class ReactiveEffect {
   }
   run() {
     if (!this.active) return this.fn // 虽然当前effect失活了，但调用 run 时依然要执行 fn
+    console.log('已在effectStack，不执行fn', effectStack.includes(this))
     if (!effectStack.includes(this)) { // 避免 fn 内赋值时触发 setter 重复执行 run()导致死循环
       try {
         effectStack.push(activedEffect = this)
@@ -47,7 +48,7 @@ export function track(target, key) {
 
 export function trackEffects(dep) {
   if (!dep.has(activedEffect)) {
-    dep.add(activedEffect) // 主线：收集当前 effect实例
+    dep.add(activedEffect) // 主线：收集当前 effect实例（dep为Set，也可写在判断外）
     activedEffect.deps.push(dep) // 互相记录
   }
 }
@@ -63,17 +64,24 @@ export function trigger(target, key) {
 
 export function triggerEffects(dep) {
   for (const effect of dep) {
-    if (effect !== activedEffect) // 赋值可能发生在 effect内，注意不能重复执行
-      if (effect.scheduler) { // 为实现计算属性响应更新的功能：以手动执行计算属性中收集的其他 effect
-        return effect.scheduler()
-      }
-    effect.run() // 主线：触发依赖执行更新
+    if (effect.scheduler) { // computed & watch主线：若当前effect来源于计算或侦听器，要触发计算属性响应更新，执行计算属性中收集的 effect
+      return effect.scheduler()
+    } else {
+      effect.run() // 主线：触发依赖执行更新
+    }
   }
 }
 
-export function effect(fn) {
+export interface ReactiveEffectOptions { lazy?: boolean, scheduler? }
+
+export function effect(fn, options?: ReactiveEffectOptions) {
   const _effect = new ReactiveEffect(fn)
-  _effect.run()
+  if (options) {
+    Object.assign(_effect, options)
+  }
+  if (!options || !options.lazy) {
+    _effect.run()
+  }
   // 处理 强制执行effect（runner()）和注销effect（runner.effect.stop()）的情况
   const runner = _effect.run.bind(_effect)
   runner.effect = _effect

@@ -10,6 +10,19 @@ export function isString(value) {
   return typeof value === 'string'
 }
 
+export const toTypeString = (value: unknown): string =>
+  Object.prototype.toString.call(value)
+
+export const hasChanged = (value: any, oldValue: any): boolean =>
+  !Object.is(value, oldValue)
+
+export const isPlainObject = (val: unknown): val is object =>
+  toTypeString(val) === '[object Object]'
+export const isMap = (val: unknown): val is Map<any, any> =>
+  toTypeString(val) === '[object Map]'
+export const isSet = (val: unknown): val is Set<any> =>
+  toTypeString(val) === '[object Set]'
+
 // 通过 ShapeFlags[...] & component 校验组件类型
 export const enum ShapeFlags {
   ELEMENT = 1, // 元素

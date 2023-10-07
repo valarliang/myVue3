@@ -5,6 +5,7 @@
   "description": "",
   "scripts": {
     "build-runtime-dom": "node scripts/dev.js runtime-dom -f global -s",
+    "build-runtime-core": "node scripts/dev.js runtime-core -f global -s",
     "build-reactivity": "node scripts/dev.js reactivity -f global -s"
   },
   "keywords": [],

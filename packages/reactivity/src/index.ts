@@ -1,4 +1,4 @@
-export { reactive, toRaw } from './reactive'
+export { reactive, toRaw, isReactive, isShallow, isReadonly } from './reactive'
 export { effect, ReactiveEffect } from './effect'
 export { computed } from './computed'
-export { ref } from './ref'
+export { ref, isRef } from './ref'
