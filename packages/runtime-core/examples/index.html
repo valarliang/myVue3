@@ -13,10 +13,10 @@
   const { reactive, effect, computed, ref, toRaw, watch } = VueRuntimeCore
   const cyber = { name:'David&Lucy', friends: 'Maine', job: { main: 'edgerunner' } }
   const David = reactive(cyber)
-  watch(David, (n, o) => {
-    console.log(n)
+  watch(() => David.name, (n, o) => {
+    console.log(n, o)
   }, {
-    immediate: true
+    // immediate: true
   })
 
   setTimeout(() => {

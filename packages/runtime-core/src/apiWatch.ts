@@ -11,13 +11,15 @@ function doWatch(source, cb, { immediate = false, deep = false } = {}) {
   if (isRef(source)) {
     getter = () => source.value
   } else if (isReactive(source)) {
-    getter = () => source
+    getter = () => source // source若直接是一个响应式对象，getter没有读取动作，后面需借助 traverse实现触发响应属性的依赖收集
     deep = true
   } else if (Array.isArray(source)) {
     getter = () =>
       source.map(s => {
         if (isRef(s)) {
           return s.value
+        } else if (isReactive(s)) {
+          return traverse(s) // 同上，没有读取动作，需借助 traverse触发依赖收集
         } else if (isFunction(s)) {
           return s()
         } else {
@@ -30,10 +32,10 @@ function doWatch(source, cb, { immediate = false, deep = false } = {}) {
 
   if (cb && deep) {
     const baseGetter = getter
-    getter = () => traverse(baseGetter()) // 利用 traverse 读取source触发依赖收集
+    getter = () => traverse(baseGetter()) // traverse 遍历读取 source（手动触发依赖收集）
   }
 
-  let oldValue = {}
+  let oldValue
   const job = () => {
     if (cb) {
       const newValue = effect.run()
@@ -46,7 +48,7 @@ function doWatch(source, cb, { immediate = false, deep = false } = {}) {
   let scheduler = () => queueJob(job) // 用微任务执行
   const effect = new ReactiveEffect(getter, scheduler)
 
-  // initial run
+  // initial run 主线：执行 effect.run()触发getter，开始收集依赖
   if (cb) {
     if (immediate) {
       job()

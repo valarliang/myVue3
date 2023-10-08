@@ -32,7 +32,6 @@ var VueRuntimeCore = (function (exports) {
       run() {
           if (!this.active)
               return this.fn; // 虽然当前effect失活了，但调用 run 时依然要执行 fn
-          console.log('已在effectStack，不执行fn', effectStack.includes(this));
           if (!effectStack.includes(this)) { // 避免 fn 内赋值时触发 setter 重复执行 run()导致死循环
               try {
                   effectStack.push(activedEffect = this);
@@ -875,6 +874,9 @@ var VueRuntimeCore = (function (exports) {
               if (isRef(s)) {
                   return s.value;
               }
+              else if (isReactive(s)) {
+                  return traverse(s); // 同35行，没有读取动作，需手动触发依赖收集
+              }
               else if (isFunction(s)) {
                   return s();
               }
@@ -888,7 +890,7 @@ var VueRuntimeCore = (function (exports) {
       }
       if (cb && deep) {
           const baseGetter = getter;
-          getter = () => traverse(baseGetter()); // 利用 traverse 读取source触发依赖收集
+          getter = () => traverse(baseGetter()); // source若直接是一个响应式对象，需用 traverse 读取 source（手动触发依赖收集）
       }
       let oldValue;
       const job = () => {

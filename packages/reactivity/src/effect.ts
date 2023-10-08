@@ -11,7 +11,6 @@ export class ReactiveEffect {
   }
   run() {
     if (!this.active) return this.fn // 虽然当前effect失活了，但调用 run 时依然要执行 fn
-    console.log('已在effectStack，不执行fn', effectStack.includes(this))
     if (!effectStack.includes(this)) { // 避免 fn 内赋值时触发 setter 重复执行 run()导致死循环
       try {
         effectStack.push(activedEffect = this)
