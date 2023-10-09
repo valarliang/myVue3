@@ -59,9 +59,7 @@ function doWatch(source, cb, { immediate = false, deep = false } = {}) {
     effect.run()
   }
 
-  return () => {
-    effect.stop()
-  }
+  return effect.stop
 }
 
 // 遍历查看value，用于触发响应数据的 getter 从而收集依赖

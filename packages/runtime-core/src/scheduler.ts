@@ -1,5 +1,8 @@
 const queue = []
 let isFlushPending = false
+let currentFlushPromise = null
+
+const resolvedPromise = Promise.resolve()
 
 export function queueJob(job) {
   if (!queue.length || !queue.includes(job)) {
@@ -11,7 +14,7 @@ export function queueJob(job) {
 function queueFlush() {
   if (!isFlushPending) {
     isFlushPending = true
-    Promise.resolve().then(flushJobs)
+    currentFlushPromise = resolvedPromise.then(flushJobs)
   }
 }
 
@@ -19,4 +22,10 @@ function flushJobs() {
   isFlushPending = false
   queue.forEach(job => job())
   queue.length = 0
+  currentFlushPromise = null
+}
+
+export function nextTick(this, fn?) {
+  const p = currentFlushPromise || resolvedPromise
+  return fn ? p.then(this ? fn.bind(this) : fn) : p
 }

@@ -40,7 +40,7 @@ export function track(target, key) {
   }
   let dep = depsMap.get(key)
   if (!dep) {
-    depsMap.set(key, dep = new Set()) // 源码中使用 createDep()
+    depsMap.set(key, dep = new Set()) // 源码中使用 createDep()，此处简化
   }
   trackEffects(dep)
 }
@@ -48,7 +48,7 @@ export function track(target, key) {
 export function trackEffects(dep) {
   if (!dep.has(activedEffect)) {
     dep.add(activedEffect) // 主线：收集当前 effect实例（dep为Set，也可写在判断外）
-    activedEffect.deps.push(dep) // 互相记录
+    activedEffect.deps.push(dep) // 互相记录，用于实现去除当前响应依赖的功能
   }
 }
 
@@ -63,7 +63,7 @@ export function trigger(target, key) {
 
 export function triggerEffects(dep) {
   for (const effect of dep) {
-    if (effect.scheduler) { // computed & watch主线：若当前effect来源于计算或侦听器，要触发计算属性响应更新，执行计算属性中收集的 effect
+    if (effect.scheduler) { // computed & watch主线：若当前effect来源于计算或侦听器，要触发侦听器回调和计算属性响应更新，执行计算属性中收集的 effect
       return effect.scheduler()
     } else {
       effect.run() // 主线：触发依赖执行更新
