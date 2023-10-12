@@ -40,7 +40,7 @@ function doWatch(source, cb, { immediate = false, deep = false } = {}) {
     if (cb) {
       const newValue = effect.run()
       if (deep || hasChanged(newValue, oldValue)) {
-        cb(newValue, oldValue)
+        cb(newValue, oldValue) // 注意：effect在上面已执行结束，此时没有 activedEffect，所以 watch 回调内的响应属性不会被追踪
         oldValue = newValue
       }
     }
