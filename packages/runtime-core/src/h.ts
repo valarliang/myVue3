@@ -1,6 +1,6 @@
 import { isObject } from "@vue/shared";
-import { isVNode, createVNode } from "./createVNode";
-
+import { isVNode, createVNode } from "./vnode";
+// h 函数用于生成 vnode
 export function h(type, propsOrChildren, children) {
   // 写法1.  h('div',{color:red})
   // 写法2.  h('div',h('span'))
@@ -9,12 +9,15 @@ export function h(type, propsOrChildren, children) {
   let l = arguments.length;
   if (l === 2) {
     if (isObject(propsOrChildren) && !Array.isArray(propsOrChildren)) {
+      // single vnode without props: h('div',h('span')) (参数h('span')会先执行返回vnode对象）
       if (isVNode(propsOrChildren)) {
-        return createVNode(type, null, [propsOrChildren])//  h('div',h('span'))
+        return createVNode(type, null, [propsOrChildren])
       }
-      return createVNode(type, propsOrChildren);  //  h('div',{color:red})
+      // props without children: h('div',{color:red})
+      return createVNode(type, propsOrChildren);
     } else {
-      return createVNode(type, null, propsOrChildren); // h('div','hello')   h('div',['hello','hello'])
+      // omit props: h('div','hello')   h('div',['hello','hello'])
+      return createVNode(type, null, propsOrChildren);
     }
   } else {
     if (l > 3) {

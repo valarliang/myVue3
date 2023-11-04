@@ -4,7 +4,7 @@ import { ShapeFlags } from '@vue/shared'
 import { ReactiveEffect } from '@vue/reactivity';
 import { createAppAPI } from './apiCreateApp'
 import { createComponentInstance, setupComponent } from './component';
-import { isSameVNodeType, normalizeVNode, Text } from './createVNode';
+import { isSameVNodeType, normalizeVNode, Text } from './vnode';
 
 export function createRenderer(renderOptions) { // runtime-core   renderOptionsDOMAPI -> rootComponent -> rootProps -> container
   const {
