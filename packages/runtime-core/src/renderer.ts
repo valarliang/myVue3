@@ -4,7 +4,7 @@ import { ShapeFlags } from '@vue/shared'
 import { ReactiveEffect } from '@vue/reactivity';
 import { createAppAPI } from './apiCreateApp'
 import { createComponentInstance, setupComponent } from './component';
-import { isSameVNodeType, normalizeVNode, Text } from './vnode';
+import { isSameVNodeType, normalizeVNode, Text, Comment, Fragment } from './vnode';
 
 export function createRenderer(renderOptions) { // runtime-core   renderOptionsDOMAPI -> rootComponent -> rootProps -> container
   const {
@@ -46,73 +46,6 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
     // 默认调用（force）update方法 就会执行componentUpdateFn
     const update = instance.update = effect.run.bind(effect);
     update();
-  }
-  // 组件的挂载流程
-  const mountComponent = (initialVNode, container) => {
-    // 根据组件的虚拟节点 创造一个真实节点，渲染到容器中
-    // 1.我们要给组件创造一个组件的实例
-    const instance = initialVNode.component = createComponentInstance(initialVNode);
-    // 2. 需要给组件的实例进行赋值操作
-    setupComponent(instance); // 给实例赋予属性
-    // 3.调用render方法实现 组件的渲染逻辑。 如果依赖的状态发生变化 组件要重新渲染
-    // effect 可以用在组件中，这样数据变化后可以自动重新的执行effect函数
-    setupRenderEffect(initialVNode, instance, container); // 渲染effect
-  }
-  // 组建的生成、更新
-  const processComponent = (n1, n2, container) => {
-    if (n1 == null) {
-      // 组件的初始化
-      mountComponent(n2, container);
-    } else {
-      // 组件的更新
-      // updateComponent(n1, n2)
-    }
-  }
-
-  const mountChildren = (children, container) => {
-    // 如果是一个文本 可以直接   el.textContnt = 文本2
-    // ['文本1','文本2']   两个文本 需要 创建两个文本节点 塞入到我们的元素中
-    for (let i = 0; i < children.length; i++) {
-      const child = (children[i] = normalizeVNode(children[i]));
-      patch(null, child, container); // 如果是文本需要特殊处理
-    }
-  }
-  const mountElement = (vnode, container, anchor) => {
-    // vnode中的children  可能是字符串 或者是数组
-    let { type, props, shapeFlag, children } = vnode; // 获取节点的类型 属性 儿子的形状 children
-    // 创建根节点
-    let el = vnode.el = hostCreateElement(type)
-    // 添加子节点
-    if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
-      hostSetElementText(el, children)
-    } else if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {  // 按位与
-      mountChildren(children, el);
-    }
-    // 处理属性
-    if (props) {
-      for (const key in props) {
-        hostPatchProp(el, key, null, props[key]); // 给元素添加属性
-      }
-    }
-    // 挂载到DOM
-    hostInsert(el, container, anchor);
-  }
-  // 属性patch
-  const patchProps = (oldProps, newProps, el) => {
-    if (oldProps === newProps) return;
-
-    for (let key in newProps) {
-      const prev = oldProps[key];
-      const next = newProps[key]; // 获取新老属性
-      if (prev !== next) {
-        hostPatchProp(el, key, prev, next);
-      }
-    }
-    for (const key in oldProps) { // 老的有新的没有  移除老的
-      if (!(key in newProps)) {
-        hostPatchProp(el, key, oldProps[key], null);
-      }
-    }
   }
   // 新旧两组子元素patch
   const patchKeyedChildren = (c1, c2, container) => {
@@ -231,11 +164,28 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
       unmount(children[i])
     }
   }
+  // 属性patch
+  const patchProps = (el, oldProps, newProps) => {
+    if (oldProps !== newProps) {
+      for (const key in oldProps) { // 老的有新的没有  移除老的
+        if (!(key in newProps)) {
+          hostPatchProp(el, key, oldProps[key], null);
+        }
+      }
+      for (let key in newProps) {
+        const prev = oldProps[key];
+        const next = newProps[key]; // 获取新老属性
+        if (prev !== next) {
+          hostPatchProp(el, key, prev, next);
+        }
+      }
+    }
+  }
   // 子元素对比
   const patchChildren = (n1, n2, container) => {
     const c1 = n1 && n1.children
-    const c2 = n2.children
     const prevShapeFlag = n1 ? n1.shapeFlag : 0
+    const c2 = n2.children
     const { shapeFlag } = n2
 
     // children has 3 possibilities: text, array or no children.
@@ -247,7 +197,7 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
       if (c2 !== c1) {
         hostSetElementText(container, c2)
       }
-    } else { // n2 是 array or no children
+    } else {
       if (prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) {
         // prev children was array
         if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
@@ -274,9 +224,48 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
     let el = n2.el = n1.el; // 是同一节点，复用老元素
     const oldProps = n1.props || {};
     const newProps = n2.props || {};
-    patchProps(oldProps, newProps, el); // 复用后比较属性
-    // 实现比较儿子  diff算法
+    // 比较儿子  diff算法
     patchChildren(n1, n2, el)
+    patchProps(el, oldProps, newProps); // 复用后比较属性
+  }
+  const mountChildren = (children, container) => {
+    for (let i = 0; i < children.length; i++) {
+      // 源码中已限制h函数渲染Fragment的children只能为数组：h(Fragment, ['hello'])，否则此处报错:
+      // Cannot assign to read only property '0' of string 'hello'(即 'h' = v)
+      const child = (children[i] = normalizeVNode(children[i]));
+      patch(null, child, container);
+    }
+  }
+  const mountElement = (vnode, container, anchor) => {
+    // vnode中的children  可能是字符串 或者是数组
+    let { type, props, shapeFlag, children } = vnode; // 获取节点的类型 属性 儿子的形状 children
+    // 创建根节点
+    let el = vnode.el = hostCreateElement(type)
+    // 添加子节点
+    if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
+      hostSetElementText(el, children)
+    } else if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {  // 按位与
+      mountChildren(children, el);
+    }
+    // 处理属性
+    if (props) {
+      for (const key in props) {
+        hostPatchProp(el, key, null, props[key]); // 给元素添加属性
+      }
+    }
+    // 挂载到DOM
+    hostInsert(el, container, anchor);
+  }
+  // 组件的挂载流程
+  const mountComponent = (initialVNode, container) => {
+    // 根据组件的虚拟节点 创造一个真实节点，渲染到容器中
+    // 1.我们要给组件创造一个组件的实例
+    const instance = initialVNode.component = createComponentInstance(initialVNode);
+    // 2. 需要给组件的实例进行赋值操作
+    setupComponent(instance); // 给实例赋予属性
+    // 3.调用render方法实现 组件的渲染逻辑。 如果依赖的状态发生变化 组件要重新渲染
+    // effect 可以用在组件中，这样数据变化后可以自动重新的执行effect函数
+    setupRenderEffect(initialVNode, instance, container); // 渲染effect
   }
   // 组件的生成、更新 最终是 DOM 的生成和更新
   const processElement = (n1, n2, container, anchor) => {
@@ -287,13 +276,41 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
       // diff
       patchElement(n1, n2); // 更新两个元素之间的差异
     }
-
+  }
+  // 组件的生成、更新
+  const processComponent = (n1, n2, container) => {
+    if (n1 == null) {
+      // 组件的初始化
+      mountComponent(n2, container);
+    } else {
+      // 组件的更新
+      // updateComponent(n1, n2)
+    }
+  }
+  const processFragment = (n1, n2, container) => {
+    if (n1 === null) {
+      mountChildren(n2.children, container)
+    } else {
+      patchChildren(n1, n2, container)
+    }
+  }
+  const processCommentNode = (n1, n2, container) => {
+    if (n1 === null) {
+      hostInsert(n2.el = hostCreateComment(n2.children), container)
+    } else {
+      // 注释无更新
+      n2.el = n1.el
+    }
   }
   const processText = (n1, n2, container) => {
     if (n1 === null) {
-      // 文本的初始化 
-      let textNode = n2.el = hostCreateText(n2.children);
-      hostInsert(textNode, container)
+      // 文本的初始化并挂载
+      hostInsert(n2.el = hostCreateText(n2.children), container)
+    } else {
+      const el = (n2.el = n1.el!)
+      if (n2.children !== n1.children) {
+        hostSetText(el, n2.children as string)
+      }
     }
   }
   const unmount = (vnode) => {
@@ -301,17 +318,23 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
   }
   // 比较前后
   const patch = (n1, n2, container, anchor = null) => {
+    if (n1 == n2) return;
     // 更新时两个元素完全不一样，删除老的元素，创建新的元素
-    if (n1 && !isSameVNodeType(n1, n2)) { // n1 有值 再看两个是否是相同节点
+    if (n1 && !isSameVNodeType(n1, n2)) {
       unmount(n1);
       n1 = null;
     }
-    if (n1 == n2) return;
     const { shapeFlag, type } = n2; // 初始化：createApp(type)
     switch (type) {
       case Text:
         processText(n1, n2, container);
-        break;
+        break
+      case Comment:
+        processCommentNode(n1, n2, container)
+        break
+      case Fragment: // 多个根节点组成的片段
+        processFragment(n1, n2, container)
+        break
       default:
         if (shapeFlag & ShapeFlags.COMPONENT) {
           processComponent(n1, n2, container);
@@ -320,9 +343,16 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
         }
     }
   }
-  // 初次渲染
-  const render = (vnode, container) => { // 将虚拟节点 转化成真实节点渲染到容器中
-    patch(null, vnode, container);
+  // render作用：将虚拟节点转化成真实节点渲染到容器中
+  const render = (vnode, container) => {
+    if (vnode == null) {
+      if (container._vnode) { // 有旧节点则卸载
+        unmount(container._vnode)
+      }
+    } else {
+      patch(container._vnode || null, vnode, container, null) // 初次渲染n1为null
+    }
+    container._vnode = vnode
   }
 
   return {

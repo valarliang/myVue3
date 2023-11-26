@@ -6,7 +6,7 @@ import {
   normalizeStyle,
   normalizeClass,
 } from "@vue/shared";
-
+// vnode非标签DOM类型
 export const Fragment = Symbol.for('v-fgt')
 export const Text = Symbol.for('v-txt')
 export const Comment = Symbol.for('v-cmt')
@@ -68,10 +68,9 @@ export function normalizeChildren(vnode, children) {
 export function isVNode(vnode){
     return !!vnode.__v_isVNode
 }
-export const Text = Symbol();
 export function normalizeVNode(vnode){
     if(isObject(vnode)){
-        return vnode;
+      return vnode;
     }
     return createVNode(Text,null,String(vnode));
 }
