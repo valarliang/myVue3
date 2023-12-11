@@ -5,6 +5,7 @@ import { ReactiveEffect } from '@vue/reactivity';
 import { createAppAPI } from './apiCreateApp'
 import { createComponentInstance, setupComponent } from './component';
 import { isSameVNodeType, normalizeVNode, Text, Comment, Fragment } from './vnode';
+import { queueJob } from "./scheduler";
 
 export function createRenderer(renderOptions) { // runtime-core   renderOptionsDOMAPI -> rootComponent -> rootProps -> container
   const {
@@ -20,33 +21,6 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
     nextSibling: hostNextSibling,
   } = renderOptions;
 
-  // 创建渲染effect
-  const setupRenderEffect = (initialVNode, instance, container) => {
-    // 核心就是调用render，数据变化 就重新调用render 
-    const componentUpdateFn = () => {
-      let { proxy } = instance; //  render中的参数
-      if (!instance.isMounted) {
-        // 组件初始化的流程
-        // 真正渲染组件，渲染的其实是subTree
-        // 调用render方法 （渲染页面的时候会进行取值操作，那么取值的时候会进行依赖收集，收集对应的effect，稍后属性变化了会重新执行当前方法）
-        const subTree = instance.subTree = instance.render.call(proxy, proxy); // 渲染的时候会调用 h 方法
-        patch(null, subTree, container);
-        // patch渲染完subTree 会生成真实根节点之后挂载到 subTree.el
-        initialVNode.el = subTree.el
-        instance.isMounted = true;
-      } else {
-        // 组件更新的流程 。。。
-        // diff算法   比较前后的两颗树 
-        const prevTree = instance.subTree;
-        const nextTree = instance.render.call(proxy, proxy); // 重新渲染
-        patch(prevTree, nextTree, container); // 比较两棵树
-      }
-    }
-    const effect = new ReactiveEffect(componentUpdateFn);
-    // 默认调用（force）update方法 就会执行componentUpdateFn
-    const update = instance.update = effect.run.bind(effect);
-    update();
-  }
   // 新旧两组子元素patch
   const patchKeyedChildren = (c1, c2, container) => {
     let i = 0
@@ -159,6 +133,44 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
       }
     }
   }
+
+  // 创建渲染effect
+  const setupRenderEffect = (initialVNode, instance, container) => {
+    // 核心就是调用render，数据变化 就重新调用render 
+    const componentUpdateFn = () => {
+      let { proxy, bm, m, bu, u } = instance; //  render中的参数
+      if (!instance.isMounted) {
+        if (bm) bm() // beforeMount hook
+        // 组件初始化的流程
+        // 真正渲染组件，渲染的其实是subTree
+        // 调用render方法 （渲染页面的时候会进行取值操作，触发依赖收集，收集对应的effect，稍后属性变化了会重新执行当前方法）
+        const subTree = instance.subTree = instance.render.call(proxy, proxy);
+        // patch渲染完subTree 会生成真实根节点之后挂载到 subTree.el（即 vnode.el = hostCreateElement(type)）
+        patch(null, subTree, container); // 递归挂载
+        initialVNode.el = subTree.el
+        if (m) m() // mounted hook
+        instance.isMounted = true
+      } else {
+        // 组件更新的流程 。。。
+        // diff算法   比较前后的两颗树 
+        if (bu) bu() // beforeUpdate hook
+        const nextTree = instance.render.call(proxy, proxy); // 重新渲染
+        const prevTree = instance.subTree;
+        instance.subTree = nextTree
+        patch(prevTree, nextTree, container); // 比较两棵树
+        if (u) u() // updated hook
+      }
+    }
+    const effect = instance.effect = new ReactiveEffect(
+      componentUpdateFn,
+      // 通过 effect.scheduler 可对 update包裹异步方法，异步响应页面更新，否则componentUpdateFn将被同步触发
+      // 当用户对同一状态进行频繁更新（for循环），避免多次执行无意义的 componentUpdateFn
+      () => queueJob(update)
+    )
+    // 默认调用（force）update方法 就会执行componentUpdateFn
+    const update = instance.update = effect.run.bind(effect);
+    update();
+  }
   const unmountChildren = children => {
     for (let i = 0; i < children.length; i++) {
       unmount(children[i])
@@ -256,15 +268,19 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
     // 挂载到DOM
     hostInsert(el, container, anchor);
   }
+  const updateComponent = (n1, n2) => {
+    const instance = (n2.component = n1.component)
+    // instance.update()
+  }
   // 组件的挂载流程
   const mountComponent = (initialVNode, container) => {
     // 根据组件的虚拟节点 创造一个真实节点，渲染到容器中
-    // 1.我们要给组件创造一个组件的实例
+    // 1.创造组件的实例
     const instance = initialVNode.component = createComponentInstance(initialVNode);
-    // 2. 需要给组件的实例进行赋值操作
-    setupComponent(instance); // 给实例赋予属性
-    // 3.调用render方法实现 组件的渲染逻辑。 如果依赖的状态发生变化 组件要重新渲染
-    // effect 可以用在组件中，这样数据变化后可以自动重新的执行effect函数
+    // 2.resolve props and slots for setup context
+    setupComponent(instance);
+    // 3.调用render方法实现组件的渲染逻辑。如果依赖的状态发生变化，组件要重新渲染
+    //（实现：为 render+patch 建立一个effect，当render读取data时，当前effect会作为依赖被收集）
     setupRenderEffect(initialVNode, instance, container); // 渲染effect
   }
   // 组件的生成、更新 最终是 DOM 的生成和更新
@@ -284,7 +300,7 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
       mountComponent(n2, container);
     } else {
       // 组件的更新
-      // updateComponent(n1, n2)
+      updateComponent(n1, n2)
     }
   }
   const processFragment = (n1, n2, container) => {

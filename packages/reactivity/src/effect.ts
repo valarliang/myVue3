@@ -2,6 +2,7 @@
 // 1.配合 activedEffect 解决 effect 内部嵌套 effect 时收集的依赖属性属于哪个effect的问题
 // 2.记录当前effect实例，避免 fn 内赋值时触发 setter 重复执行 run()导致死循环
 const effectStack = []
+
 export let activedEffect // 保存当前执行的effect，以便收集依赖
 export class ReactiveEffect {
   active = true // 当前 effect 实例有用（有依赖项）
@@ -63,7 +64,8 @@ export function trigger(target, key) {
 
 export function triggerEffects(dep) {
   for (const effect of dep) {
-    if (effect.scheduler) { // computed & watch主线：若当前effect来源于计算或侦听器，要触发侦听器回调和计算属性响应更新，执行计算属性中收集的 effect
+    // computed & watch主线：若当前effect来源于计算或侦听器，需触发侦听器回调执行和计算属性响应更新（执行计算属性中收集的 effect）
+    if (effect.scheduler) {
       return effect.scheduler()
     } else {
       effect.run() // 主线：触发依赖执行更新
