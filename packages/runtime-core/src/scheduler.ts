@@ -1,5 +1,6 @@
 const queue = []
 let isFlushPending = false
+const pendingPostFlushCbs = []
 let currentFlushPromise = null
 
 const resolvedPromise = Promise.resolve()
@@ -18,10 +19,17 @@ function queueFlush() {
   }
 }
 
-function flushJobs() {
+export function queuePostFlushCb(cb) {
+  pendingPostFlushCbs.push(...cb)
+  queueFlush()
+}
+
+function flushJobs(seen) {
   isFlushPending = false
   queue.forEach(job => job())
   queue.length = 0
+  pendingPostFlushCbs.forEach(job => job())
+  pendingPostFlushCbs.length = 0
   currentFlushPromise = null
 }
 

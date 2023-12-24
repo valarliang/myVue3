@@ -1,4 +1,5 @@
 import {
+  isArray,
   isObject,
   isString,
   isFunction,
@@ -12,7 +13,7 @@ export const Text = Symbol.for('v-txt')
 export const Comment = Symbol.for('v-cmt')
 export const Static = Symbol.for('v-stc')
 
-export function createVNode(type, props, children = null) { // h('div',{},['hellozf','hellozf'])
+export function createVNode(type, props = null, children = null) { // h('div',{},['hellozf','hellozf'])
   // class & style normalization.
   if (props) {
     let { class: klass, style } = props
@@ -68,11 +69,26 @@ export function normalizeChildren(vnode, children) {
 export function isVNode(vnode){
     return !!vnode.__v_isVNode
 }
-export function normalizeVNode(vnode){
-    if(isObject(vnode)){
-      return vnode;
-    }
-    return createVNode(Text,null,String(vnode));
+export function normalizeVNode(child){
+  if (child == null || typeof child === 'boolean') {
+    // empty placeholder
+    return createVNode(Comment)
+  } else if (isArray(child)) {
+    // fragment
+    return createVNode(
+      Fragment,
+      null,
+      // #3666, avoid reference pollution when reusing vnode
+      child.slice()
+    )
+  } else if (typeof child === 'object') {
+    // already vnode, this should be the most common since compiled templates
+    // always produce all-vnode children arrays
+    return child
+  } else {
+    // strings and numbers
+    return createVNode(Text, null, String(child))
+  }
 }
 
 export function isSameVNodeType(n1,n2){

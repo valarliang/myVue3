@@ -2,10 +2,10 @@ import { isObject } from "@vue/shared";
 import { isVNode, createVNode } from "./vnode";
 // h 函数用于将 组件或html节点 生成 vnode
 export function h(type, propsOrChildren, children) {
-  // 写法1.  h('div',{color:red})
-  // 写法2.  h('div',h('span'))
-  // 写法3   h('div','hello')
-  // 写法4：  h('div',['hello','hello'])
+  // 写法1  h('div',{color:red})
+  // 写法2  h('div',h('span'))
+  // 写法3  h('div','hello')
+  // 写法4  h('div',['hello','hello'])
   let l = arguments.length;
   if (l === 2) {
     if (isObject(propsOrChildren) && !Array.isArray(propsOrChildren)) {

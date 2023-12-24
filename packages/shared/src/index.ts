@@ -21,6 +21,12 @@ export const isMap = (val: unknown): val is Map<any, any> =>
 export const isSet = (val: unknown): val is Set<any> =>
   toTypeString(val) === '[object Set]'
 
+export const invokeArrayFns = (fns: Function[], arg?: any) => {
+  for (let i = 0; i < fns.length; i++) {
+    fns[i](arg)
+  }
+}
+
 // 通过 ShapeFlags[...] & component 校验组件类型
 export const enum ShapeFlags {
   ELEMENT = 1, // 元素

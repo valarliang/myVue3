@@ -1,11 +1,11 @@
 
 // runtime-core  根平台无关的运行时  
-import { ShapeFlags } from '@vue/shared'
+import { ShapeFlags, invokeArrayFns } from '@vue/shared'
 import { ReactiveEffect } from '@vue/reactivity';
 import { createAppAPI } from './apiCreateApp'
 import { createComponentInstance, setupComponent } from './component';
 import { isSameVNodeType, normalizeVNode, Text, Comment, Fragment } from './vnode';
-import { queueJob } from "./scheduler";
+import { queueJob, queuePostFlushCb } from "./scheduler";
 
 export function createRenderer(renderOptions) { // runtime-core   renderOptionsDOMAPI -> rootComponent -> rootProps -> container
   const {
@@ -21,12 +21,12 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
     nextSibling: hostNextSibling,
   } = renderOptions;
 
-  // 新旧两组子元素patch
+  // 新旧两组子元素patch，分5种情况，前4种用于处理最常见的插入、删除列表元素的情况，第五种：从乱序开始的地方处理
   const patchKeyedChildren = (c1, c2, container) => {
     let i = 0
     let e1 = c1.length - 1 // prev ending index
     let e2 = c2.length - 1 // next ending index
-    // 1. sync from start
+    // 1. sync from start 从前到后一一对比，相同则递归patch，不同跳出循环
     // (a b) c d
     // (a b) e c d
     while (i <= e1 && i <= e2) {
@@ -39,53 +39,61 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
       }
       i++
     }
-    // 2. sync from end
+    // 2. sync from end 从后到前一一对比，相同则递归patch，不同跳出循环
     // a b (c d)
     // a b e (c d)
     while (i <= e1 && i <= e2) {
-      const n1 = c1[i]
-      const n2 = c2[i]
+      const n1 = c1[e1]
+      const n2 = c2[e2]
       if (isSameVNodeType(n1, n2)) {
         patch(n1, n2, container)
       } else {
         break
       }
-      c1--
-      c2--
+      e1--
+      e2--
     }
-    // 3. common sequence + mount
-    // (a b) [(c d)]
-    // (a b) e ... [(c d)]
-    // i = 2, e1 = 1, e2 = 2+
+    // 3. common sequence + mount 若c2多元素，批量挂载
+    // [(a b)] [(c d)]
+    // [(a b)] e ... [(c d)]
+
+    // (a b)
+    // (a b) e ...
+    // i = 2, e1 = 1, e2 = 2（或 3、4...最后一个不相等的元素)
     // (a b)
     // c ... (a b)
-    // i = 0, e1 = -1, e2 = 0+
+    // i = 0, e1 = -1, e2 = 0（或 1、2...最后一个不相等的元素)
     if (i > e1) {
       if (i <= e2) {
         const nextPos = e2 + 1
-        const anchor = nextPos < c2.length ? c2[nextPos].el : null // 判断在哪里新增元素（通过判断是否有参照物）
-        while (i <= e2) {
+        const anchor = c2[nextPos]?.el // 判断是否有anchor（用于node.insertBefore(child, anchor)）
+        while (i <= e2) { // 批量 mount
           patch(null, c2[i], container, anchor)
           i++
         }
       }
-    } else if (i > e2) {
-    // 4. common sequence + unmount
-    // (a b) c
+    }
+    // 4. common sequence + unmount 若c2少元素，批量卸载
+    // [(a b)] e ... [(c d)]
+    // [(a b)] [(c d)]
+
+    // (a b) c ...
     // (a b)
-    // i = 2, e1 = 2, e2 = 1
-    // a (b c)
+    // i = 2, e1 = 2（或 3、4...最后一个不相等的元素), e2 = 1
+    // a ... (b c)
     // (b c)
-    // i = 0, e1 = 0, e2 = -1
+    // i = 0, e1 = 0（或 1、2...最后一个不相等的元素), e2 = -1
+    else if (i > e2) {
       while (i <= e1) {
         unmount(c1[i])
         i++
       }
-    } else {
+    }
     // 5. unknown sequence
     // [i ... e1 + 1]: a b [c d e] f g
     // [i ... e2 + 1]: a b [e d c h] f g
     // i = 2, e1 = 4, e2 = 5
+    else {
       const s1 = i // prev starting index
       const s2 = i // next starting index
 
@@ -95,38 +103,49 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
         keyToNewIndexMap.set(c2[i].key, i)
       }
 
+      // 5.2 loop through old children left to be patched and try to patch
+      // matching nodes & remove nodes that are no longer present
+
+      let moved = false // 用于判断是否需要计算最长递增子序列
+      // used to track whether any node has moved
+      let maxNewIndexSoFar = 0
       // used for determining longest stable subsequence
       const toBePatched = e2 - s2 + 1 // 要对比的数量
       const newIndexToOldIndexMap = new Array(toBePatched).fill(0) // [0,0,0,0]
 
-      // 5.2 loop through old children left to be patched and try to patch
-      // matching nodes & remove nodes that are no longer present
       for (let i = s1; i <= e1; i++) {
         const prevChild = c1[i]
         let newIndex = keyToNewIndexMap.get(prevChild.key)
         if (newIndex === undefined) {
           unmount(prevChild) // 移除不需要的旧节点
         } else {
-          newIndexToOldIndexMap[newIndex - s2] = i + 1 // [4,3,2,0] 加1是为避免s1为0（0用于判定是否为新增节点）
-          patch(prevChild, c2[newIndex], container) // 递归patch相同的节点
+          newIndexToOldIndexMap[newIndex - s2] = i + 1 // [4,3,2,0] 加1是为避免s1为0（0用于表示新增的节点）
+          if (newIndex >= maxNewIndexSoFar) {
+            maxNewIndexSoFar = newIndex
+          } else {
+            // 如果没有走过这里，说明c2复用节点的前后顺序并没有变化（只可能新增节点），无需移动元素，也就无需计算最长递增子序列优化移动次数
+            // 相应的newIndexToOldIndexMap例子[c i d e h]：[2,0,3,4,0]
+            moved = true
+          }
+          patch(prevChild, c2[newIndex], container) // 递归patch更新相同的节点
         }
       }
 
       // 5.3 move and mount
-      const increasingNewIndexSequence = getSequence(newIndexToOldIndexMap) // generate longest stable subsequence
+      const increasingNewIndexSequence = moved ? getSequence(newIndexToOldIndexMap) : [] // generate longest stable subsequence [2]
       let j = increasingNewIndexSequence.length - 1
       // looping backwards so that we can use last patched node as anchor
       for (i = toBePatched - 1; i >= 0; i--) { 
         const nextIndex = s2 + i
         const nextChild = c2[nextIndex]
-        const anchor = nextIndex + 1 < c2.length ? c2[nextIndex + 1].el : null
+        const anchor = c2[nextIndex + 1]?.el
         if (newIndexToOldIndexMap[i] === 0) { // mount新增节点
           patch(null, nextChild, container, anchor)
-        } else {
-          // 利用 最长递增子序列算法 优化移动复用节点的次数（减少DOM操作）
-          if (i !== increasingNewIndexSequence[j]) { // 如果是递增序列元素则无需移动
+        } else if (moved) {
+          // 利用 最长递增子序列算法最大限度减少移动复用节点的次数（减少DOM操作）
+          if (i !== increasingNewIndexSequence[j]) { // 如果下标不在最长递增子序列中则需移动元素
             hostInsert(nextChild.el, container, anchor)
-          } else {
+          } else { // 无需移动
             j--
           }
         }
@@ -140,7 +159,7 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
     const componentUpdateFn = () => {
       let { proxy, bm, m, bu, u } = instance; //  render中的参数
       if (!instance.isMounted) {
-        if (bm) bm() // beforeMount hook
+        if (bm) invokeArrayFns(bm) // beforeMount hook
         // 组件初始化的流程
         // 真正渲染组件，渲染的其实是subTree
         // 调用render方法 （渲染页面的时候会进行取值操作，触发依赖收集，收集对应的effect，稍后属性变化了会重新执行当前方法）
@@ -148,17 +167,18 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
         // patch渲染完subTree 会生成真实根节点之后挂载到 subTree.el（即 vnode.el = hostCreateElement(type)）
         patch(null, subTree, container); // 递归挂载
         initialVNode.el = subTree.el
-        if (m) m() // mounted hook
+        // mounted hook
+        if (m) queuePostFlushCb(m)
         instance.isMounted = true
       } else {
         // 组件更新的流程 。。。
         // diff算法   比较前后的两颗树 
-        if (bu) bu() // beforeUpdate hook
+        if (bu) invokeArrayFns(bu) // beforeUpdate hook
         const nextTree = instance.render.call(proxy, proxy); // 重新渲染
         const prevTree = instance.subTree;
         instance.subTree = nextTree
         patch(prevTree, nextTree, container); // 比较两棵树
-        if (u) u() // updated hook
+        if (u) queuePostFlushCb(u) // updated hook
       }
     }
     const effect = instance.effect = new ReactiveEffect(
@@ -242,7 +262,7 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
   }
   const mountChildren = (children, container) => {
     for (let i = 0; i < children.length; i++) {
-      // 源码中已限制h函数渲染Fragment的children只能为数组：h(Fragment, ['hello'])，否则此处报错:
+      // 源码中已限制 h函数渲染Fragment的children只能为数组：h(Fragment, ['hello'])，否则此处报如下错误:
       // Cannot assign to read only property '0' of string 'hello'(即 'h' = v)
       const child = (children[i] = normalizeVNode(children[i]));
       patch(null, child, container);
@@ -256,8 +276,8 @@ export function createRenderer(renderOptions) { // runtime-core   renderOptionsD
     // 添加子节点
     if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
       hostSetElementText(el, children)
-    } else if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {  // 按位与
-      mountChildren(children, el);
+    } else if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+      mountChildren(children, el); // 递归挂载子节点
     }
     // 处理属性
     if (props) {

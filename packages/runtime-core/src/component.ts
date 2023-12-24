@@ -1,5 +1,6 @@
 import { reactive } from "@vue/reactivity";
 import { hasOwn, isFunction, isObject } from "@vue/shared";
+import { onBeforeMount, onMounted, onBeforeUpdate, onUpdated } from "./apiLifecycle";
 
 let uid = 0;
 export function createComponentInstance(vnode) {
@@ -89,6 +90,8 @@ const PublicInstanceProxyHandlers = {
     return true;
   },
 };
+
+export let currentInstance = null
 export function setupStatefulComponent(instance) {
   // 核心就是调用组件的setup方法
   const Component = instance.type;
@@ -96,6 +99,7 @@ export function setupStatefulComponent(instance) {
   instance.proxy = new Proxy(instance.ctx, PublicInstanceProxyHandlers); // proxy就是代理的上下文
   if (setup) { // composition API
     const setupContext = createSetupContext(instance);
+    currentInstance = instance
     let setupResult = setup(instance.props, setupContext); /// 获取setup的返回值
     if (isFunction(setupResult)) {
       instance.render = setupResult; // 如果setup返回的是函数那么就是render函数
@@ -164,9 +168,13 @@ export function applyOptions(instance) {
     instance.data = reactive(data)
   }
   if (created) created.call(publicThis) // created hook
-  instance.bm = beforeMount.bind(publicThis)
-  instance.m = mounted.bind(publicThis)
-  instance.bu = beforeUpdate.bind(publicThis)
-  instance.u = updated.bind(publicThis)
-  // um、bum、a、da...
+
+  function registerLifecycleHook(register, hook) {
+    register(hook.bind(publicThis))
+  }
+  registerLifecycleHook(onBeforeMount, beforeMount)
+  registerLifecycleHook(onMounted, mounted)
+  registerLifecycleHook(onBeforeUpdate, beforeUpdate)
+  registerLifecycleHook(onUpdated, updated)
+  // register um、bum、a、da...
 }
